@@ -4,7 +4,7 @@ from __future__ import absolute_import, unicode_literals
 from collections import defaultdict
 from collector.celery import app
 
-from .helper import snmp_walk
+from .helper import snmp_walk, snmp_get
 
 
 IF_TABLE_OIDS = [
@@ -32,6 +32,8 @@ IF_TABLE_OIDS = [
     ('IF-MIB', 'ifOutErrors'),
 ]
 
+SYSTEM_OIDS = [('SNMPv2-MIB', 'sysUpTime', 0)]
+
 
 def grouping(items):
     """ Grouping oid, index and value by index
@@ -49,3 +51,10 @@ def walk_iftable(hostname, *options):
     """ Walk ifTable task
     """
     return grouping(snmp_walk(IF_TABLE_OIDS, hostname, *options))
+
+
+@app.task
+def get_system(hostname, *options):
+    """ Get system task
+    """
+    return grouping(snmp_get(SYSTEM_OIDS, hostname, *options))

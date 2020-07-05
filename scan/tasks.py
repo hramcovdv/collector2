@@ -1,15 +1,24 @@
-""" NMAP scan module
+""" ICMP tasks module
 """
 from __future__ import absolute_import, unicode_literals
-from nmap import PortScanner
+from icmplib import ping
 from collector.celery import app
 
 
 @app.task
-def ping_scan(hosts):
-    """ Ping-scan task
+def ping_host(address, **kwargs):
+    """ Ping host task
     """
-    net_map = PortScanner()
-    net_map.scan(hosts, arguments='-sn')
+    host = ping(address, **kwargs)
 
-    return net_map.all_hosts()
+    if host.is_alive:
+        return {
+            'min_rtt': host.min_rtt,
+            'avg_rtt': host.avg_rtt,
+            'max_rtt': host.max_rtt,
+            'packets_sent': host.packets_sent,
+            'packets_received': host.packets_received,
+            'packet_loss': host.packet_loss
+        }
+
+    return {}

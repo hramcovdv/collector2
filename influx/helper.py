@@ -5,7 +5,7 @@
 class SeriesHelper():
     """ Helper to write points to the backend
     """
-    def __init__(self, client, series: str, fields: list, tags: list):
+    def __init__(self, client, series: str, fields: list, tags=None):
         self.client = client
         self.series = series
         self.fields = fields
@@ -15,8 +15,8 @@ class SeriesHelper():
     def add_point(self, item):
         """ Add single series
         """
-        tags = {t: item.get(t) for t in self.tags}
         fields = {f: to_num(item.get(f)) for f in self.fields}
+        tags = {t: item.get(t) for t in self.tags} if self.tags else {}
 
         self.points.append({'measurement': self.series,
                             'fields': fields,
@@ -38,4 +38,7 @@ class SeriesHelper():
 def to_num(num):
     """ Convert string to float or integer
     """
-    return float(num) if '.' in str(num) else int(num)
+    if isinstance(num, str):
+        return float(num) if '.' in num else int(num)
+
+    return num

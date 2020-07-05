@@ -1,7 +1,7 @@
 """ Celery config module
 """
 from kombu import Queue
-from celery.schedules import crontab
+# from celery.schedules import crontab
 
 
 BROKER_URL = 'redis://{hostname}:{port}/{db}'.format(
@@ -11,7 +11,7 @@ BROKER_URL = 'redis://{hostname}:{port}/{db}'.format(
 )
 
 CELERY_RESULT_BACKEND = BROKER_URL
-CELERY_RESULT_EXPIRES = 300
+CELERY_RESULT_EXPIRES = 3600
 
 # CELERY_ACKS_LATE = True
 CELERYD_PREFETCH_MULTIPLIER = 2
@@ -40,9 +40,19 @@ CELERY_ROUTES = {
 }
 
 CELERYBEAT_SCHEDULE = {
-    'collect-iftable-every-5min': {
+    'collect-iftable-every-1min': {
         'task': 'collector.cron.tasks.collect_iftable',
-        'schedule': crontab(minute='*/5'),
-        'args': ('10.10.8.0/24', 300)
+        'schedule': 60.0,
+        'args': ('10.10.8.0/25', 60)
+    },
+    'collect-system-every-1min': {
+        'task': 'collector.cron.tasks.collect_system',
+        'schedule': 60.0,
+        'args': ('10.10.8.0/25', 60)
+    },
+    'collect-icmp-every-30sec': {
+        'task': 'collector.cron.tasks.collect_icmp',
+        'schedule': 30.0,
+        'args': ('10.10.8.0/25', 30)
     }
 }
