@@ -1,6 +1,7 @@
 """ SNMP components module
 """
 import logging
+from collections import defaultdict
 from pysnmp.smi import builder, view, compiler
 from pysnmp.hlapi import getCmd, nextCmd, ObjectIdentity, ObjectType
 from pysnmp.hlapi import SnmpEngine, CommunityData, UdpTransportTarget, ContextData
@@ -29,80 +30,70 @@ def get_var_binds(oids):
     return var_binds
 
 
-def snmp_walk(oids, hostname, community='public', lockup_mib=False):
+def snmp_walk(oids, hostname, community='public'):
     """ PySNMP WALK implementation
     """
-    response = []
+    response = defaultdict(dict)
 
-    for (error_indication,
-         error_status,
-         error_index,
-         var_binds) in nextCmd(SnmpEngine(),
-                               CommunityData(community, mpModel=1),
-                               UdpTransportTarget((hostname, 161), timeout=3, retries=0),
-                               ContextData(),
-                               *get_var_binds(oids),
-                               lexicographicMode=False,
-                               lookupMib=lockup_mib):
+    session = nextCmd(SnmpEngine(),
+                      CommunityData(community, mpModel=1),
+                      UdpTransportTarget((hostname, 161), timeout=3, retries=0),
+                      ContextData(),
+                      *get_var_binds(oids),
+                      lexicographicMode=False,
+                      lookupMib=False)
+
+    for error_indication, error_status, error_index, var_binds in session:
         if error_indication:
-            logging.info('%s - %s', hostname, error_indication)
+            logging.warning('%s - %s', hostname, error_indication)
             break
 
         if error_status:
-            logging.info('%s - %s at %s',
-                          hostname,
-                          error_status.prettyPrint(),
-                          error_index and var_binds[int(error_index) - 1][0] or '?')
+            logging.warning('%s - %s at %s',
+                            hostname,
+                            error_status.prettyPrint(),
+                            error_index and var_binds[int(error_index)-1][0] or '?')
             break
 
         for var_name, var_value in var_binds:
             (_,
              object_name,
-             object_instance_id) = MIB_VIEW.getNodeLocation(var_name)
+             object_id) = MIB_VIEW.getNodeLocation(var_name)
 
-            response.append((object_name,
-                             object_instance_id.prettyPrint(),
-                             var_value.prettyPrint()))
+            response[object_id.prettyPrint()].update({object_name: var_value.prettyPrint()})
 
-    return response
+    return dict(response)
 
 
-def snmp_get(oids, hostname, community='public', lockup_mib=False):
+def snmp_get(oids, hostname, community='public'):
     """ PySNMP GET implementation
     """
-    response = []
+    response = defaultdict(dict)
 
     session = getCmd(SnmpEngine(),
                      CommunityData(community, mpModel=1),
-                     UdpTransportTarget((hostname, 161)),
+                     UdpTransportTarget((hostname, 161), timeout=3, retries=0),
                      ContextData(),
-                     lookupMib=lockup_mib)
+                     *get_var_binds(oids),
+                     lookupMib=False)
 
-    next(session)
-
-    queue = [(oid,) for oid in get_var_binds(oids)]
-
-    while queue:
-        error_indication, error_status, error_index, var_binds = session.send(queue.pop())
-
+    for error_indication, error_status, error_index, var_binds in session:
         if error_indication:
-            logging.info('%s - %s', hostname, error_indication)
+            logging.warning('%s - %s', hostname, error_indication)
             break
 
         if error_status:
-            logging.info('%s - %s at %s',
-                          hostname,
-                          error_status.prettyPrint(),
-                          error_index and var_binds[int(error_index)-1][0] or '?')
+            logging.warning('%s - %s at %s',
+                            hostname,
+                            error_status.prettyPrint(),
+                            error_index and var_binds[int(error_index)-1][0] or '?')
             break
 
         for var_name, var_value in var_binds:
             (_,
              object_name,
-             object_instance_id) = MIB_VIEW.getNodeLocation(var_name)
+             object_id) = MIB_VIEW.getNodeLocation(var_name)
 
-            response.append((object_name,
-                             object_instance_id.prettyPrint(),
-                             var_value.prettyPrint()))
+            response[object_id.prettyPrint()].update({object_name: var_value.prettyPrint()})
 
-    return response
+    return dict(response)

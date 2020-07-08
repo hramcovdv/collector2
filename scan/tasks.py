@@ -11,14 +11,9 @@ def ping_host(address, **kwargs):
     """
     host = ping(address, **kwargs)
 
-    if host.is_alive:
-        return {
-            'min_rtt': host.min_rtt,
+    return {'min_rtt': host.min_rtt,
             'avg_rtt': host.avg_rtt,
             'max_rtt': host.max_rtt,
             'packets_sent': host.packets_sent,
             'packets_received': host.packets_received,
-            'packet_loss': host.packet_loss
-        }
-
-    return {}
+            'packet_loss': host.packet_loss}

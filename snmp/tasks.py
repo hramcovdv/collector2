@@ -1,13 +1,12 @@
 """ SNMP tasks module
 """
 from __future__ import absolute_import, unicode_literals
-from collections import defaultdict
 from collector.celery import app
 
 from .helper import snmp_walk, snmp_get
 
 
-IF_TABLE_OIDS = [
+IFTABLE_OIDS = [
     # ('IF-MIB', 'ifIndex'),
     ('IF-MIB', 'ifName'),
     ('IF-MIB', 'ifType'),
@@ -32,29 +31,20 @@ IF_TABLE_OIDS = [
     ('IF-MIB', 'ifOutErrors'),
 ]
 
-SYSTEM_OIDS = [('SNMPv2-MIB', 'sysUpTime', 0)]
-
-
-def grouping(items):
-    """ Grouping oid, index and value by index
-    """
-    grouped = defaultdict(dict)
-
-    for oid, index, value in items:
-        grouped[index][oid] = value
-
-    return list(grouped.values())
+SYSTEM_OIDS = [
+    ('SNMPv2-MIB', 'sysUpTime', 0)
+]
 
 
 @app.task
-def walk_iftable(hostname, *options):
+def walk_iftable(hostname, **kwargs):
     """ Walk ifTable task
     """
-    return grouping(snmp_walk(IF_TABLE_OIDS, hostname, *options))
+    return snmp_walk(IFTABLE_OIDS, hostname, **kwargs)
 
 
 @app.task
-def get_system(hostname, *options):
+def get_system(hostname, **kwargs):
     """ Get system task
     """
-    return grouping(snmp_get(SYSTEM_OIDS, hostname, *options))
+    return snmp_get(SYSTEM_OIDS, hostname, **kwargs)

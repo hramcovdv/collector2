@@ -32,7 +32,7 @@ def write_iftable(items, tags=None):
                                       'ifOutDiscards',
                                       'ifOutErrors'])
 
-        series.add_points(items)
+        series.add_points(items.values())
         series.write_points(tags=tags, time_precision='s')
 
 
@@ -45,7 +45,7 @@ def write_system(items, tags=None):
                               'system',
                               fields=['sysUpTime'])
 
-        series.add_points(items)
+        series.add_points(items.values())
         series.write_points(tags=tags, time_precision='s')
 
 
