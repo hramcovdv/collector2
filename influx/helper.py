@@ -5,34 +5,34 @@
 class SeriesHelper():
     """ Helper to write points to the backend
     """
-    def __init__(self, client, series: str, fields: list, tags=None):
+    def __init__(self, client, measurement: str, tags=None):
         self.client = client
-        self.series = series
-        self.fields = fields
-        self.tags = tags
+        self.measurement = measurement
+        self.tags = tags or []
         self.points = []
 
     def add_point(self, item):
         """ Add single series
         """
-        fields = {f: to_num(item.get(f)) for f in self.fields}
         tags = {t: item.get(t) for t in self.tags} if self.tags else {}
+        fields = {k: to_num(v) for k, v in item.items() if k not in self.tags}
 
-        self.points.append({'measurement': self.series,
-                            'fields': fields,
-                            'tags': tags})
+        self.points.append({
+            'measurement': self.measurement,
+            'fields': fields,
+            'tags': tags
+        })
 
     def add_points(self, items):
-        """ Add multiply serires
+        """ Add multiply series
         """
         for item in items:
             self.add_point(item)
 
-
-    def write_points(self, **options):
+    def write_points(self, **kwargs):
         """ Write series
         """
-        self.client.write_points(self.points, **options)
+        self.client.write_points(self.points, **kwargs)
 
 
 def to_num(num):

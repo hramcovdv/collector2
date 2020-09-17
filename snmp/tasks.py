@@ -1,50 +1,91 @@
-""" SNMP tasks module
+""" SNMP components module
 """
 from __future__ import absolute_import, unicode_literals
-from collector.celery import app
-
-from .helper import snmp_walk, snmp_get
-
-
-IFTABLE_OIDS = [
-    # ('IF-MIB', 'ifIndex'),
-    ('IF-MIB', 'ifName'),
-    ('IF-MIB', 'ifType'),
-    # ('IF-MIB', 'ifMtu'),
-    # ('IF-MIB', 'ifSpeed'),
-    # ('IF-MIB', 'ifLastChange'),
-    ('IF-MIB', 'ifAdminStatus'),
-    ('IF-MIB', 'ifOperStatus'),
-    ('IF-MIB', 'ifInOctets'),
-    ('IF-MIB', 'ifInMulticastPkts'),
-    ('IF-MIB', 'ifInBroadcastPkts'),
-    ('IF-MIB', 'ifInUcastPkts'),
-    ('IF-MIB', 'ifInNUcastPkts'),
-    ('IF-MIB', 'ifInDiscards'),
-    ('IF-MIB', 'ifInErrors'),
-    ('IF-MIB', 'ifOutOctets'),
-    ('IF-MIB', 'ifOutMulticastPkts'),
-    ('IF-MIB', 'ifOutBroadcastPkts'),
-    ('IF-MIB', 'ifOutUcastPkts'),
-    ('IF-MIB', 'ifOutNUcastPkts'),
-    ('IF-MIB', 'ifOutDiscards'),
-    ('IF-MIB', 'ifOutErrors'),
-]
-
-SYSTEM_OIDS = [
-    ('SNMPv2-MIB', 'sysUpTime', 0)
-]
+import logging
+from collections import defaultdict
+from pysnmp.hlapi import getCmd, nextCmd, ObjectIdentity, ObjectType
+from pysnmp.hlapi import SnmpEngine, CommunityData, UdpTransportTarget, ContextData
+from collector.celery import app, mib_view
 
 
-@app.task
-def walk_iftable(hostname, **kwargs):
-    """ Walk ifTable task
+def get_var_binds(oids):
+    """ Return list of ObjectType class instances
     """
-    return snmp_walk(IFTABLE_OIDS, hostname, **kwargs)
+    var_binds = []
+
+    for oid in oids:
+        if isinstance(oid, (tuple, list)):
+            ident = ObjectIdentity(*oid)
+        if isinstance(oid, str):
+            ident = ObjectIdentity(oid)
+
+        var_binds.append(ObjectType(ident))
+
+    return var_binds
 
 
-@app.task
-def get_system(hostname, **kwargs):
-    """ Get system task
+@app.task(name='snmp.snmp_get', ignore_result=True)
+def snmp_get(oids, hostname, community='public'):
+    """ PySNMP GET implementation
     """
-    return snmp_get(SYSTEM_OIDS, hostname, **kwargs)
+    response = defaultdict(dict)
+
+    session = getCmd(SnmpEngine(),
+                     CommunityData(community, mpModel=1),
+                     UdpTransportTarget((hostname, 161), timeout=3, retries=1),
+                     ContextData(),
+                     *get_var_binds(oids),
+                     lookupMib=False)
+
+    for error_indication, error_status, error_index, var_binds in session:
+        if error_indication:
+            logging.warning('%s - %s', hostname, error_indication)
+            break
+
+        if error_status:
+            logging.warning('%s - %s at %s',
+                            hostname,
+                            error_status.prettyPrint(),
+                            error_index and var_binds[int(error_index)-1][0] or '?')
+            break
+
+        for var_name, var_value in var_binds:
+            (_, object_name, object_id) = mib_view.getNodeLocation(var_name)
+
+            response[object_id.prettyPrint()].update({object_name: var_value.prettyPrint()})
+
+    return dict(response)
+
+
+@app.task(name='snmp.snmp_walk', ignore_result=True)
+def snmp_walk(oids, hostname, community='public'):
+    """ PySNMP WALK implementation
+    """
+    response = defaultdict(dict)
+
+    session = nextCmd(SnmpEngine(),
+                      CommunityData(community, mpModel=1),
+                      UdpTransportTarget((hostname, 161), timeout=3, retries=1),
+                      ContextData(),
+                      *get_var_binds(oids),
+                      lexicographicMode=False,
+                      lookupMib=False)
+
+    for error_indication, error_status, error_index, var_binds in session:
+        if error_indication:
+            logging.warning('%s - %s', hostname, error_indication)
+            break
+
+        if error_status:
+            logging.warning('%s - %s at %s',
+                            hostname,
+                            error_status.prettyPrint(),
+                            error_index and var_binds[int(error_index)-1][0] or '?')
+            break
+
+        for var_name, var_value in var_binds:
+            (_, object_name, object_id) = mib_view.getNodeLocation(var_name)
+
+            response[object_id.prettyPrint()].update({object_name: var_value.prettyPrint()})
+
+    return dict(response)

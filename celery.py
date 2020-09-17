@@ -5,8 +5,9 @@ import os
 from dotenv import load_dotenv
 from influxdb import InfluxDBClient
 from pymongo import MongoClient
+from pysnmp.smi import builder, view, compiler
 from celery import Celery
-# from celery.schedules import crontab
+
 
 load_dotenv()
 
@@ -17,6 +18,12 @@ BROKER_URL = 'redis://{hostname}:{port}/{db}'.format(
 )
 
 BACKEND_URL = BROKER_URL
+
+mib_builder = builder.MibBuilder()
+compiler.addMibCompiler(mib_builder, sources=['file:///usr/share/snmp/mibs'])
+mib_builder.loadModules()
+
+mib_view = view.MibViewController(mib_builder)
 
 influx_client = InfluxDBClient(
     host=os.getenv('INFLUXDB_HOST'),
@@ -42,21 +49,3 @@ app = Celery(
 )
 
 app.config_from_object('collector.celeryconfig')
-
-app.conf.beat_schedule = {
-    'collect-iftable-every-1min': {
-        'task': 'collector.cron.tasks.collect_iftable',
-        'schedule': 60.0,
-        'kwargs': (ex=60,)
-    },
-    'collect-system-every-1min': {
-        'task': 'collector.cron.tasks.collect_system',
-        'schedule': 60.0,
-        'kwargs': (ex=60,)
-    },
-    'collect-icmp-every-1min': {
-        'task': 'collector.cron.tasks.collect_icmp',
-        'schedule': 30.0,
-        'kwargs': (ex=60,)
-    }
-}

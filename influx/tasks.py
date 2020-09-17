@@ -7,61 +7,38 @@ from collector.celery import influx_client as client
 from .helper import SeriesHelper
 
 
-@app.task(ignore_result=True)
+@app.task(name='influx.write_uptime', ignore_result=True)
+def write_uptime(items, tags=None):
+    """ Write uptime
+    """
+    series = SeriesHelper(client, measurement='system')
+
+    series.add_points(items.values())
+    series.write_points(tags=tags, time_precision='s')
+
+
+@app.task(name='influx.write_iftable', ignore_result=True)
 def write_iftable(items, tags=None):
-    """ Write ifTable task
+    """ Write ifTable
     """
-    if items:
-        series = SeriesHelper(client,
-                              'ifTable',
-                              tags=['ifName', 'ifType'],
-                              fields=['ifAdminStatus',
-                                      'ifOperStatus',
-                                      'ifInOctets',
-                                      'ifInMulticastPkts',
-                                      'ifInBroadcastPkts',
-                                      'ifInUcastPkts',
-                                      'ifInNUcastPkts',
-                                      'ifInDiscards',
-                                      'ifInErrors',
-                                      'ifOutOctets',
-                                      'ifOutMulticastPkts',
-                                      'ifOutBroadcastPkts',
-                                      'ifOutUcastPkts',
-                                      'ifOutNUcastPkts',
-                                      'ifOutDiscards',
-                                      'ifOutErrors'])
+    series = SeriesHelper(
+        client,
+        measurement='ifTable',
+        tags=['ifName', 'ifType']
+    )
 
-        series.add_points(items.values())
-        series.write_points(tags=tags, time_precision='s')
+    series.add_points(items.values())
+    series.write_points(tags=tags, time_precision='s')
 
 
-@app.task(ignore_result=True)
-def write_system(items, tags=None):
-    """ Write system task
-    """
-    if items:
-        series = SeriesHelper(client,
-                              'system',
-                              fields=['sysUpTime'])
-
-        series.add_points(items.values())
-        series.write_points(tags=tags, time_precision='s')
-
-
-@app.task(ignore_result=True)
+@app.task(name='influx.write_icmp', ignore_result=True)
 def write_icmp(item, tags=None):
-    """ Write ICMP task
+    """ Write ICMP result
     """
-    if item:
-        series = SeriesHelper(client,
-                              'icmp',
-                              fields=['min_rtt',
-                                      'avg_rtt',
-                                      'max_rtt',
-                                      'packets_sent',
-                                      'packets_received',
-                                      'packet_loss'])
+    if item is None:
+        return
 
-        series.add_point(item)
-        series.write_points(tags=tags, time_precision='s')
+    series = SeriesHelper(client, measurement='icmp')
+
+    series.add_point(item)
+    series.write_points(tags=tags, time_precision='s')
